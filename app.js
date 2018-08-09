@@ -1,16 +1,29 @@
-const express = require('express');
-const cookieParser = require('cookie-parser');
-const expressSession = require('express-session');
-const bunyan = require('bunyan');
-//Conecta al archivo .env , donde se encuentran los archivos de configuracion
-//Se recomiendo un key store de Heroku o Microsoft por temas de seguridad
-require ('dotenv').config();
-//Autenticacion a traves de Azure AD
-const passport = require('passport');
-const OIDCStrategy = require('passport-azure-ad').OIDCStrategy;
-//Inicializamos express
-const app = express();
+'use strict';
 
+var express = require('express');
+var cookieParser = require('cookie-parser');
+var expressSession = require('express-session');
+var bodyParser = require('body-parser');
+var multer = require('multer');
+var methodOverride = require('method-override');
+//Autenticacion a traves de Azure AD
+var passport = require('passport');
+var util = require('util');
+var bunyan = require('bunyan');
+var logger = require('morgan');
+
+
+var config = require('./config');
+
+
+
+// set up database for express session
+var MongoStore = require('connect-mongo')(expressSession);
+var mongoose = require('mongoose');
+var OIDCStrategy = require('passport-azure-ad').OIDCStrategy;
+//Inicializamos express
+var app = express();
+app.use(bodyParser.json());
 var log = bunyan.createLogger({
   name: 'Microsoft OIDC Web Aplication'
 });
@@ -35,7 +48,7 @@ passport.deserializeUser(function(oid, done) {
   });
 });
 
-const user = [];
+var users = [];
 
 var findByOid = function(oid, fn) {
   for (var i = 0, len = users.length; i < len; i++) {
@@ -110,10 +123,9 @@ passport.use(new OIDCStrategy({
 //-----------------------------------------------------------------------------
 // Config the app, include middlewares
 //-----------------------------------------------------------------------------
-var app = express();
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
-app.use(express.logger());
+app.use(logger('dev'));
 
 app.use(methodOverride());
 app.use(cookieParser());
@@ -135,11 +147,11 @@ if (config.useMongoDBSessionStore) {
 
 app.use(bodyParser.urlencoded({ extended : true }));
 
+
 // Initialize Passport!  Also use passport.session() middleware, to support
 // persistent login sessions (recommended).
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(app.router);
 app.use(express.static(__dirname + '/../../public'));
 
 //-----------------------------------------------------------------------------
@@ -180,7 +192,6 @@ app.get('/login',
   },
   function(req, res) {
     log.info('Login was called in the Sample');
-    res.redirect('/');
 });
 
 // 'GET returnURL'
@@ -192,13 +203,13 @@ app.get('/auth/openid/return',
     passport.authenticate('azuread-openidconnect',
       {
         response: res,                      // required
-        failureRedirect: '/'
+        failureRedirect: '/login'
       }
     )(req, res, next);
   },
   function(req, res) {
     log.info('We received a return from AzureAD.');
-    res.redirect('/');
+    console.log(req.user);
   });
 
 // 'POST returnURL'
@@ -210,13 +221,13 @@ app.post('/auth/openid/return',
     passport.authenticate('azuread-openidconnect',
       {
         response: res,                      // required
-        failureRedirect: '/'
+        failureRedirect: '/login'
       }
     )(req, res, next);
   },
   function(req, res) {
-    log.info('We received a return from AzureAD.');
-    res.redirect('/');
+    log.info('We received a return from AzureAD ;)');
+    console.log(req.user.upn);
   });
 
 // 'logout' route, logout from passport, and destroy the session with AAD.
